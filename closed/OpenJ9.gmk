@@ -32,15 +32,28 @@ ifeq (,$(BUILD_ID))
   BUILD_ID := 000000
 endif
 
-OPENJDK_SHA := $(shell git -C $(TOPDIR) rev-parse --short HEAD)
-ifeq (,$(OPENJDK_SHA))
-  $(error Could not determine OpenJDK SHA)
-endif
+# FindSHA
+# -------
+# $1 - variable name
+# $2 - root directory of git repository
+# $3 - blank or 'optional'
+FindSHA = $(eval $(call FindSHA_helper,$(strip $1),$(strip $2),$(strip $3)))
+define FindSHA_helper
+  ifneq (,$(wildcard $2))
+    $1 := $$(shell git -C $2 rev-parse --short HEAD)
+  else
+    $1 :=
+  endif
+  ifneq ($3,optional)
+    ifeq (,$$($1))
+      $$(error Could not determine $1 for $2)
+    endif
+  endif
+endef
 
-OPENJ9_SHA := $(shell git -C $(OPENJ9_TOPDIR) rev-parse --short HEAD)
-ifeq (,$(OPENJ9_SHA))
-  $(error Could not determine OpenJ9 SHA)
-endif
+$(call FindSHA, OPENJDK_SHA,   $(TOPDIR))
+$(call FindSHA, OPENJ9_SHA,    $(OPENJ9_TOPDIR))
+$(call FindSHA, OPENJ9OMR_SHA, $(OPENJ9OMR_TOPDIR))
 
 # Find OpenJ9 tag associated with current commit (suppressing stderr in case there is no such tag).
 OPENJ9_TAG := $(shell git -C $(OPENJ9_TOPDIR) describe --exact-match HEAD 2>/dev/null)
@@ -52,11 +65,6 @@ ifeq (,$(OPENJ9_TAG))
   OPENJ9_VERSION_STRING := $(OPENJ9_BRANCH)-$(OPENJ9_SHA)
 else
   OPENJ9_VERSION_STRING := $(OPENJ9_TAG)
-endif
-
-OPENJ9OMR_SHA := $(shell git -C $(OPENJ9OMR_TOPDIR) rev-parse --short HEAD)
-ifeq (,$(OPENJ9OMR_SHA))
-  $(error Could not determine OMR SHA)
 endif
 
 ifeq (true,$(OPENJ9_ENABLE_CMAKE))
@@ -331,9 +339,9 @@ ifeq (true,$(OPENJ9_ENABLE_CMAKE))
 
   CMAKE_ARGS := \
 	-C $(OPENJ9_TOPDIR)/runtime/cmake/caches/$(OPENJ9_BUILDSPEC).cmake \
-	-DCMAKE_TOOLCHAIN_FILE="$(OUTPUTDIR)/toolchain.cmake" \
 	-DBOOT_JDK="$(BOOT_JDK)" \
 	-DBUILD_ID=$(BUILD_ID) \
+	-DCMAKE_TOOLCHAIN_FILE="$(OUTPUTDIR)/toolchain.cmake" \
 	-DJ9VM_OMR_DIR="$(OPENJ9OMR_TOPDIR)" \
 	-DJAVA_SPEC_VERSION=$(VERSION_FEATURE) \
 	-DOMR_DDR=$(OPENJ9_ENABLE_DDR) \
